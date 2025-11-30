@@ -3,7 +3,7 @@
 import * as React from "react"
 import * as XLSX from "xlsx"
 import type { User, Project, Allocation, Position, Entity } from "@/lib/types"
-import { getCurrentUser, getCurrentUserData, getCurrentSystemUser, getSystemUsers, clearCurrentUser } from "@/lib/storage"
+import { getCurrentUser, getCurrentUserData, getCurrentSystemUser, getSystemUsers, clearCurrentUser, setCurrentUserData } from "@/lib/storage"
 import { canEditPage, canAccessTab, UserRole, canLockPayroll } from "@/lib/permissions"
 import { getSharedMonthYear, setSharedMonthYear } from "@/lib/shared-state"
 import { Button } from "@/components/ui/button"
@@ -41,14 +41,18 @@ interface UserExtended extends User {
 
 interface MonthlyAllocationItem {
   id: string
-  name: string
-  code: string
+  name?: string
+  code?: string
   description: string
   currency: string
   amount: number
   project: string
   projectTask: string
   account: string
+  userId?: string
+  userName?: string
+  accountCode?: string
+  accountName?: string
 }
 
 export default function ActualAllocationPage() {
@@ -141,11 +145,42 @@ export default function ActualAllocationPage() {
           })
         })
         setMonthlyAllocation(defaultItems)
-          [monthKey]: existingProjectData || {}
-        }
       }
-    })
-    setUsers(usersWithPayroll)
+      
+      const usersWithPayroll = userData.users.map((user: any) => {
+        // Load existing monthly data or create new empty structure
+        const existingPayrollData = user.payrollDataByMonth?.[monthKey]
+        const existingFringeData = user.fringeDataByMonth?.[monthKey]
+        const existingProjectData = user.projectDataByMonth?.[monthKey]
+        
+        return {
+          ...user,
+          entity: user.entity || "Unassigned",
+          payrollDataByMonth: {
+            ...user.payrollDataByMonth,
+            [monthKey]: existingPayrollData || {
+              currency: "USD",
+              netSalary: 0,
+              socialSecurity: 0,
+              employeeTax: 0,
+              employerTax: 0,
+              housing: 0,
+              otherBenefits: 0
+            }
+          },
+          fringeDataByMonth: {
+            ...user.fringeDataByMonth,
+            [monthKey]: existingFringeData || {}
+          },
+          projectDataByMonth: {
+            ...user.projectDataByMonth,
+            [monthKey]: existingProjectData || {}
+          }
+        }
+      })
+      setUsers(usersWithPayroll)
+    }
+    loadData()
   }, [])
 
   // Check if current user can lock payroll
