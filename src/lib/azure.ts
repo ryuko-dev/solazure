@@ -42,6 +42,8 @@ export interface GlobalData {
   allocations: any[]
   positions: any[]
   entities: any[]
+  expenses?: any[]
+  scheduledRecords?: any[]
   startMonth?: number
   startYear?: number
 }
@@ -77,7 +79,9 @@ export class AzureStorage {
         users: [],
         allocations: [],
         positions: [],
-        entities: []
+        entities: [],
+        expenses: [],
+        scheduledRecords: []
       }
     }
 
@@ -110,7 +114,9 @@ export class AzureStorage {
         users: [],
         allocations: [],
         positions: [],
-        entities: []
+        entities: [],
+        expenses: [],
+        scheduledRecords: []
       }
     }
   }

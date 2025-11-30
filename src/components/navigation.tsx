@@ -21,6 +21,7 @@ export function Navigation({ currentPage }: NavigationProps) {
     { key: 'actualAllocation', label: 'Payroll Allocation', href: '/actual-allocation' },
     { key: 'expenseAllocation', label: 'Expense Allocation', href: '/expense-allocation' },
     { key: 'scheduledRecords', label: 'Scheduled Records', href: '/scheduled-records' },
+    { key: 'azureDataViewer', label: 'Azure Data', href: '/azure-data-viewer' },
   ] as const
 
   const visibleTabs = tabs.filter(tab => true) // Show all tabs for now

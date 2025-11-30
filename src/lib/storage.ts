@@ -27,52 +27,238 @@ export function clearCurrentUser(): void {
 // User-specific data
 export async function getCurrentUserData(): Promise<GlobalData> {
   const currentUser = getCurrentUser()
+  const timestamp = new Date().toISOString()
+  
+  console.log(`[${timestamp}] [Storage] getCurrentUserData called for user:`, currentUser)
+  
   if (!currentUser) {
+    console.log(`[${timestamp}] [Storage] No current user, returning empty data`)
     return {
       projects: [],
       users: [],
       allocations: [],
       positions: [],
-      entities: []
+      entities: [],
+      expenses: [],
+      scheduledRecords: []
     }
   }
 
-  // Try Azure first, fallback to localStorage
+  // Try Azure API first, fallback to localStorage
   try {
-    const azureData = await azureStorage.getGlobalData(`user_${currentUser}`)
-    if (azureData.projects.length > 0 || azureData.users.length > 0) {
-      return azureData
+    console.log(`[${timestamp}] [Storage] Trying Azure API...`)
+    const response = await fetch('/api/azure/data')
+    if (response.ok) {
+      const azureData = await response.json()
+      console.log(`[${timestamp}] [Storage] Azure API response:`, {
+        projects: azureData.projects?.length || 0,
+        users: azureData.users?.length || 0,
+        allocations: azureData.allocations?.length || 0,
+        positions: azureData.positions?.length || 0,
+        entities: azureData.entities?.length || 0
+      })
+      
+      if (azureData.projects.length > 0 || azureData.users.length > 0) {
+        console.log(`[${timestamp}] [Storage] Using Azure data`)
+        return azureData
+      }
     }
   } catch (error) {
-    console.log("Azure not available, using localStorage")
+    console.log(`[${timestamp}] [Storage] Azure API not available, using localStorage:`, error)
   }
 
   // Fallback to localStorage
+  console.log(`[${timestamp}] [Storage] Falling back to localStorage...`)
   const localData = localStorage.getItem(STORAGE_KEYS.USER_DATA_PREFIX + currentUser)
-  return localData ? JSON.parse(localData) : {
+  const parsedData = localData ? JSON.parse(localData) : {
     projects: [],
     users: [],
     allocations: [],
     positions: [],
-    entities: []
+    entities: [],
+    expenses: [],
+    scheduledRecords: []
   }
+  
+  console.log(`[${timestamp}] [Storage] localStorage data:`, {
+    projects: parsedData.projects?.length || 0,
+    users: parsedData.users?.length || 0,
+    allocations: parsedData.allocations?.length || 0,
+    positions: parsedData.positions?.length || 0,
+    entities: parsedData.entities?.length || 0
+  })
+  
+  return parsedData
 }
 
 export async function setCurrentUserData(data: Partial<GlobalData>): Promise<void> {
   const currentUser = getCurrentUser()
   if (!currentUser) return
 
-  // Save to Azure if available
+  const timestamp = new Date().toISOString()
+  const callStack = new Error().stack?.split('\n').slice(1, 6)
+  
+  console.log(`[${timestamp}] [Storage] setCurrentUserData called with:`, {
+    projects: data.projects?.length || 0,
+    users: data.users?.length || 0,
+    allocations: data.allocations?.length || 0,
+    positions: data.positions?.length || 0,
+    entities: data.entities?.length || 0,
+    dataKeys: Object.keys(data),
+    dataKeysLength: Object.keys(data).length,
+    callStack: callStack
+  })
+  
+  // Log the specific caller for debugging
+  if (callStack && callStack.length > 0) {
+    console.log(`[${timestamp}] [Storage] Called from:`, callStack[0]?.trim())
+  }
+
+  // Save to Azure API if available
   try {
-    await azureStorage.setGlobalData(`user_${currentUser}`, data)
+    const existingData = await getCurrentUserData()
+    
+    console.log(`[${timestamp}] [Storage] Existing data has:`, {
+      projects: existingData.projects?.length || 0,
+      users: existingData.users?.length || 0,
+      allocations: existingData.allocations?.length || 0,
+      positions: existingData.positions?.length || 0,
+      entities: existingData.entities?.length || 0
+    })
+    
+    // SAFEGUARD: Never overwrite existing data with empty arrays if there's already data
+    let finalData = { ...existingData, ...data }
+    
+    console.log(`[${timestamp}] [Storage] Final merged data will have:`, {
+      projects: finalData.projects?.length || 0,
+      users: finalData.users?.length || 0,
+      allocations: finalData.allocations?.length || 0,
+      positions: finalData.positions?.length || 0,
+      entities: finalData.entities?.length || 0
+    })
+    
+    // Protect projects - only if we're not intentionally clearing them
+    if (data.projects !== undefined && data.projects.length === 0 && existingData.projects && existingData.projects.length > 0 && Object.keys(data).length > 1) {
+      console.log(`[${timestamp}] [Storage] SAFEGUARD: Preventing overwrite of`, existingData.projects.length, 'existing projects with empty array')
+      finalData.projects = existingData.projects
+    }
+    
+    // Protect users - only prevent if this looks like an accidental overwrite
+    // Allow intentional deletions (when only users array is being updated to empty)
+    if (data.users !== undefined && data.users.length === 0 && existingData.users && existingData.users.length > 0) {
+      // Check if this is an intentional deletion (only users changing) vs accidental (other data also changing)
+      const changingKeys = Object.keys(data).filter(key => data[key as keyof typeof data] !== undefined)
+      const isIntentionalDeletion = changingKeys.length === 1 && changingKeys[0] === 'users'
+      
+      if (!isIntentionalDeletion) {
+        console.log(`[${timestamp}] [Storage] SAFEGUARD: Preventing accidental overwrite of`, existingData.users.length, 'existing users with empty array')
+        finalData.users = existingData.users
+      }
+    }
+    
+    // NEW: Protect allocations from being overwritten by empty data during page navigation
+    if (data.allocations !== undefined && data.allocations.length === 0 && existingData.allocations && existingData.allocations.length > 0) {
+      // Check if this looks like a page navigation data reload (multiple data types changing)
+      const changingKeys = Object.keys(data).filter(key => data[key as keyof typeof data] !== undefined)
+      const isPageNavigationReload = changingKeys.length > 1
+      
+      if (isPageNavigationReload) {
+        console.log(`[${timestamp}] [Storage] ALLOCATION SAFEGUARD: Preventing page navigation overwrite of ${existingData.allocations.length} existing allocations`)
+        finalData.allocations = existingData.allocations
+      }
+    }
+    
+    // DISABLED: Allow allocation changes completely
+    // Allocations should be able to be edited and deleted without any restrictions
+    // DISABLED: Allow position deletions completely
+    // Positions should be able to be deleted without any restrictions
+    
+    console.log(`[${timestamp}] [Storage] Final data after safeguards:`, {
+      projects: finalData.projects?.length || 0,
+      users: finalData.users?.length || 0,
+      allocations: finalData.allocations?.length || 0,
+      positions: finalData.positions?.length || 0,
+      entities: finalData.entities?.length || 0
+    })
+    
+    console.log(`[${timestamp}] [Storage] Attempting to save to Azure API...`)
+    const response = await fetch('/api/azure/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(finalData),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        console.log(`[${timestamp}] [Storage] Azure API response:`, result)
+        if (result.verification) {
+          console.log(`[${timestamp}] [Storage] Azure verification - projects saved:`, result.verification.projects)
+          console.log(`[${timestamp}] [Storage] Azure verification - total data:`, result.verification)
+        }
+        console.log(`[${timestamp}] [Storage] Data saved to Azure successfully`)
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
   } catch (error) {
-    console.log("Azure not available, using localStorage")
+    console.log(`[${timestamp}] [Storage] Azure API not available, using localStorage:`, error)
   }
 
   // Always save to localStorage as backup
   const existingData = await getCurrentUserData()
-  const updatedData = { ...existingData, ...data }
-  localStorage.setItem(STORAGE_KEYS.USER_DATA_PREFIX + currentUser, JSON.stringify(updatedData))
+  let finalData = { ...existingData, ...data }
+  
+  console.log(`[${timestamp}] [Storage] localStorage backup - final data will have:`, {
+    projects: finalData.projects?.length || 0,
+    users: finalData.users?.length || 0,
+    allocations: finalData.allocations?.length || 0,
+    positions: finalData.positions?.length || 0,
+    entities: finalData.entities?.length || 0
+  })
+  
+  // Apply the same safeguard to localStorage
+  // Protect projects - only if we're not intentionally clearing them
+  if (data.projects !== undefined && data.projects.length === 0 && existingData.projects && existingData.projects.length > 0 && Object.keys(data).length > 1) {
+    console.log(`[${timestamp}] [Storage] SAFEGUARD: Preventing localStorage overwrite of`, existingData.projects.length, 'existing projects')
+    finalData.projects = existingData.projects
+  }
+  
+  // Protect users - only prevent if this looks like an accidental overwrite
+  // Allow intentional deletions (when only users array is being updated to empty)
+  if (data.users !== undefined && data.users.length === 0 && existingData.users && existingData.users.length > 0) {
+    // Check if this is an intentional deletion (only users changing) vs accidental (other data also changing)
+    const changingKeys = Object.keys(data).filter(key => data[key as keyof typeof data] !== undefined)
+    const isIntentionalDeletion = changingKeys.length === 1 && changingKeys[0] === 'users'
+    
+    if (!isIntentionalDeletion) {
+      console.log(`[${timestamp}] [Storage] SAFEGUARD: Preventing localStorage accidental overwrite of`, existingData.users.length, 'existing users')
+      finalData.users = existingData.users
+    }
+  }
+  
+  // NEW: Protect allocations from being overwritten by empty data during page navigation (localStorage backup)
+  if (data.allocations !== undefined && data.allocations.length === 0 && existingData.allocations && existingData.allocations.length > 0) {
+    // Check if this looks like a page navigation data reload (multiple data types changing)
+    const changingKeys = Object.keys(data).filter(key => data[key as keyof typeof data] !== undefined)
+    const isPageNavigationReload = changingKeys.length > 1
+    
+    if (isPageNavigationReload) {
+      console.log(`[${timestamp}] [Storage] ALLOCATION SAFEGUARD: Preventing localStorage page navigation overwrite of ${existingData.allocations.length} existing allocations`)
+      finalData.allocations = existingData.allocations
+    }
+  }
+  
+  console.log(`[${timestamp}] [Storage] localStorage backup - final data after safeguards:`, {
+    projects: finalData.projects?.length || 0,
+    users: finalData.users?.length || 0,
+    allocations: finalData.allocations?.length || 0,
+    positions: finalData.positions?.length || 0,
+    entities: finalData.entities?.length || 0
+  })
+  
+  localStorage.setItem(STORAGE_KEYS.USER_DATA_PREFIX + currentUser, JSON.stringify(finalData))
+  console.log(`[${timestamp}] [Storage] Data saved to localStorage as backup`)
 }
 
 // System user management
@@ -80,12 +266,12 @@ export async function getCurrentSystemUser(): Promise<SystemUser | null> {
   const currentUser = getCurrentUser()
   if (!currentUser) return null
 
-  // Try Azure first, fallback to localStorage
+  // Try Azure API first, fallback to localStorage
   try {
     const systemUsers = await getSystemUsers()
     return systemUsers.find(u => u.email === currentUser && u.isActive) || null
   } catch (error) {
-    console.log("Azure not available, using localStorage")
+    console.log("Azure API not available, using localStorage")
   }
 
   // Fallback to localStorage
@@ -95,14 +281,17 @@ export async function getCurrentSystemUser(): Promise<SystemUser | null> {
 }
 
 export async function getSystemUsers(): Promise<SystemUser[]> {
-  // Try Azure first, fallback to localStorage
+  // Try Azure API first, fallback to localStorage
   try {
-    const azureData = await azureStorage.getGlobalData('system')
-    if (azureData.users && azureData.users.length > 0) {
-      return azureData.users
+    const response = await fetch('/api/azure/users')
+    if (response.ok) {
+      const users = await response.json()
+      if (users.length > 0) {
+        return users
+      }
     }
   } catch (error) {
-    console.log("Azure not available, using localStorage")
+    console.log("Azure API not available, using localStorage")
   }
 
   // Fallback to localStorage
@@ -129,9 +318,19 @@ export async function initializeDemoData(): Promise<void> {
     ]
 
     try {
-      await azureStorage.setGlobalData('system', { users: demoUsers })
+      const response = await fetch('/api/azure/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(demoUsers)
+      })
+      
+      if (response.ok) {
+        console.log("Demo data saved to Azure")
+      }
     } catch (error) {
-      console.log("Azure not available, using localStorage")
+      console.log("Azure API not available, using localStorage")
     }
     
     localStorage.setItem(STORAGE_KEYS.SYSTEM_USERS, JSON.stringify(demoUsers))
