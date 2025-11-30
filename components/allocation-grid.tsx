@@ -85,8 +85,16 @@ export function AllocationGrid() {
     const checkAuth = async () => {
       const user = getCurrentUser()
       const systemUser = await getCurrentSystemUser()
+      
+      // TEMP: Skip authentication check for deployment testing
+      console.log("[DEBUG] Auth check - user:", user, "systemUser:", systemUser)
+      
       if (!user || !systemUser) {
-        window.location.href = "/login"
+        console.log("[DEBUG] Redirecting to login...")
+        // window.location.href = "/login"
+        // For testing, set default values
+        setCurrentUserState("test-user")
+        setCurrentUserRole("admin")
       } else {
         setCurrentUserState(user)
         setCurrentUserRole(systemUser.role)
