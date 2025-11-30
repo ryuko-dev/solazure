@@ -13,9 +13,12 @@ export function Navigation({ currentPage }: NavigationProps) {
   const [userRole, setUserRole] = useState<UserRole | null>(null)
 
   useEffect(() => {
-    const systemUser = getCurrentSystemUser()
-    // TEMP: Set default role for testing
-    setUserRole(systemUser?.role || "admin")
+    const checkAuth = async () => {
+      const systemUser = await getCurrentSystemUser()
+      // TEMP: Set default role for testing
+      setUserRole(systemUser?.role || "admin")
+    }
+    checkAuth()
   }, [])
 
   // TEMP: Show navigation even without auth for testing
@@ -29,7 +32,7 @@ export function Navigation({ currentPage }: NavigationProps) {
     { key: 'scheduledRecords', label: 'Scheduled Records', href: '/scheduled-records' },
   ] as const
 
-  const visibleTabs = tabs.filter(tab => canAccessTab(userRole, tab.key))
+  const visibleTabs = tabs.filter(tab => userRole && canAccessTab(userRole, tab.key))
 
   return (
     <nav className="bg-white border-b border-gray-200 px-6 py-3">
