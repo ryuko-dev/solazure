@@ -1,7 +1,7 @@
+// Allocation Grid Component - Fixed getUserData imports
 "use client"
 
-import React from "react"
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import type { Project, User, Allocation, Position, Entity } from "../lib/types"
 import { Button } from "./ui/button"
 import { AllocationCell } from "./allocation-cell"
