@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import type { Project, User, Allocation } from "@/lib/types"
-import { getCurrentUser, getCurrentUserData, getCurrentSystemUser, getSystemUsers, getUserData } from "@/lib/storage"
+import { getCurrentUser, getCurrentUserData, getCurrentSystemUser, getSystemUsers } from "@/lib/storage"
 import { Button } from "@/components/ui/button"
 import { Navigation } from "@/components/navigation"
 
@@ -31,50 +31,59 @@ export default function PlanningPage() {
 
   // Check login status and load data on mount
   useEffect(() => {
-    const user = getCurrentUser()
-    const systemUser = getCurrentSystemUser()
-    if (!user || !systemUser) {
-      window.location.href = "/login"
-      return
-    }
-    
-    setCurrentUser(user)
-    setCurrentUserRole(systemUser.role)
-
-    // Load data based on user role
-    if (systemUser.role === 'admin') {
-      const userData = getCurrentUserData()
-      setProjects(userData.projects)
-      setUsers(userData.users.length > 0 ? userData.users : [
-        { id: "1", name: "John Doe", department: "Engineering" },
-        { id: "2", name: "Jane Smith", department: "Design" },
-        { id: "3", name: "Bob Johnson", department: "Product" },
-      ])
-      setAllocations(userData.allocations)
-    } else {
-      const systemUsers = getSystemUsers()
-      const adminUser = systemUsers.find(u => u.role === 'admin' && u.isActive)
+    const loadData = async () => {
+      const user = getCurrentUser()
+      const systemUser = await getCurrentSystemUser()
+      if (!user || !systemUser) {
+        window.location.href = "/login"
+        return
+      }
       
-      if (adminUser) {
-        const adminData = getUserData(adminUser.email)
-        setProjects(adminData.projects)
-        setUsers(adminData.users.length > 0 ? adminData.users : [
+      setCurrentUser(user)
+      setCurrentUserRole(systemUser.role)
+
+      // Load data based on user role
+      if (systemUser.role === 'admin') {
+        // Admin loads their own data
+        const userData = await getCurrentUserData()
+        setProjects(userData.projects)
+        setUsers(userData.users.length > 0 ? userData.users : [
           { id: "1", name: "John Doe", department: "Engineering" },
           { id: "2", name: "Jane Smith", department: "Design" },
           { id: "3", name: "Bob Johnson", department: "Product" },
         ])
-        setAllocations(adminData.allocations)
+        setAllocations(userData.allocations)
+      } else {
+        const systemUsers = await getSystemUsers()
+        const adminUser = systemUsers.find(u => u.role === 'admin' && u.isActive)
+        
+        if (adminUser) {
+          const adminData = await getCurrentUserData()
+          setProjects(adminData.projects)
+          setUsers(adminData.users.length > 0 ? adminData.users : [
+            { id: "1", name: "John Doe", department: "Engineering" },
+            { id: "2", name: "Jane Smith", department: "Design" },
+            { id: "3", name: "Bob Johnson", department: "Product" },
+          ])
+          setAllocations(adminData.allocations)
+        }
       }
     }
+    loadData()
   }, [])
 
   // Load saved view settings
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const userData = getCurrentUserData()
-      setStartMonth(userData.startMonth ?? 0)
-      setStartYear(userData.startYear ?? 2024)
+    const loadSettings = async () => {
+      try {
+        const userData = await getCurrentUserData()
+        setStartMonth(userData.startMonth ?? 0)
+        setStartYear(userData.startYear ?? 2024)
+      } catch (error) {
+        console.error("Failed to load settings:", error)
+      }
     }
+    loadSettings()
   }, [])
 
   // Calculate unallocated users whenever data changes

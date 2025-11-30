@@ -3,7 +3,7 @@
 import * as React from "react"
 import * as XLSX from "xlsx"
 import type { User, Project, Allocation, Position, Entity } from "@/lib/types"
-import { getCurrentUser, getCurrentUserData, getCurrentSystemUser, getSystemUsers, getUserData, clearCurrentUser } from "@/lib/storage"
+import { getCurrentUser, getCurrentUserData, getCurrentSystemUser, getSystemUsers, clearCurrentUser } from "@/lib/storage"
 import { canEditPage, canAccessTab, UserRole, canLockPayroll } from "@/lib/permissions"
 import { getSharedMonthYear, setSharedMonthYear } from "@/lib/shared-state"
 import { Button } from "@/components/ui/button"

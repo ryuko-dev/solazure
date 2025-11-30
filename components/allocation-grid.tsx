@@ -6,7 +6,7 @@ import type { Project, User, Allocation, Position, Entity } from "../lib/types"
 import { Button } from "./ui/button"
 import { AllocationCell } from "./allocation-cell"
 import { ProjectManager } from "./project-manager"
-import { getCurrentUser, clearCurrentUser, getCurrentUserData, setCurrentUserData, getCurrentSystemUser, getUserData, getSystemUsers } from "../lib/storage"
+import { getCurrentUser, clearCurrentUser, getCurrentUserData, setCurrentUserData, getCurrentSystemUser, getSystemUsers } from "../lib/storage"
 import { UserManagement } from "./user-management"
 import { canEditPage, canAccessTab, UserRole } from "../lib/permissions"
 
@@ -32,107 +32,53 @@ export function AllocationGrid() {
   const [currentUserRole, setCurrentUserRole] = useState<UserRole | null>(null)
   
   // Load user-specific data on component mount
-  const [projects, setProjects] = useState<Project[]>(() => {
-    if (typeof window !== 'undefined') {
-      const systemUser = getCurrentSystemUser()
-      
-      if (systemUser?.role === 'admin') {
-        // Admin loads their own data
-        const userData = getCurrentUserData()
-        console.log("[v0] Admin loading own data:", userData.projects)
-        return userData.projects
-      } else {
-        // System users load admin's data
-        const systemUsers = getSystemUsers()
-        const adminUser = systemUsers.find(u => u.role === 'admin' && u.isActive)
-        
-        if (adminUser) {
-          const adminData = getUserData(adminUser.email)
-          console.log("[v0] System user loading admin data:", adminData.projects)
-          return adminData.projects
-        }
-      }
-    }
-    return []
-  })
+  const [projects, setProjects] = useState<Project[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [allocations, setAllocations] = useState<Allocation[]>([])
+  const [positions, setPositions] = useState<Position[]>([])
 
-  const [users, setUsers] = useState<User[]>(() => {
-    if (typeof window !== 'undefined') {
-      const systemUser = getCurrentSystemUser()
-      
-      if (systemUser?.role === 'admin') {
-        // Admin loads their own data
-        const userData = getCurrentUserData()
-        return userData.users.length > 0 ? userData.users : [
-          { id: "1", name: "John Doe", department: "Engineering" },
-          { id: "2", name: "Jane Smith", department: "Design" },
-          { id: "3", name: "Bob Johnson", department: "Product" },
-        ]
-      } else {
-        // System users load admin's data
-        const systemUsers = getSystemUsers()
-        const adminUser = systemUsers.find(u => u.role === 'admin' && u.isActive)
+  // Load data on component mount
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const systemUser = await getCurrentSystemUser()
         
-        if (adminUser) {
-          const adminData = getUserData(adminUser.email)
-          return adminData.users.length > 0 ? adminData.users : [
+        if (systemUser?.role === 'admin') {
+          // Admin loads their own data
+          const userData = await getCurrentUserData()
+          console.log("[v0] Admin loading own data:", userData.projects)
+          setProjects(userData.projects)
+          setUsers(userData.users.length > 0 ? userData.users : [
             { id: "1", name: "John Doe", department: "Engineering" },
             { id: "2", name: "Jane Smith", department: "Design" },
             { id: "3", name: "Bob Johnson", department: "Product" },
-          ]
+          ])
+          setAllocations(userData.allocations)
+          setPositions(userData.positions)
+        } else {
+          // System users load admin's data
+          const systemUsers = await getSystemUsers()
+          const adminUser = systemUsers.find(u => u.role === 'admin' && u.isActive)
+          
+          if (adminUser) {
+            const adminData = await getCurrentUserData()
+            console.log("[v0] System user loading admin data:", adminData.projects)
+            setProjects(adminData.projects)
+            setUsers(adminData.users.length > 0 ? adminData.users : [
+              { id: "1", name: "John Doe", department: "Engineering" },
+              { id: "2", name: "Jane Smith", department: "Design" },
+              { id: "3", name: "Bob Johnson", department: "Product" },
+            ])
+            setAllocations(adminData.allocations)
+            setPositions(adminData.positions)
+          }
         }
+      } catch (error) {
+        console.error("Failed to load data:", error)
       }
     }
-    return [
-      { id: "1", name: "John Doe", department: "Engineering" },
-      { id: "2", name: "Jane Smith", department: "Design" },
-      { id: "3", name: "Bob Johnson", department: "Product" },
-    ]
-  })
-
-  const [allocations, setAllocations] = useState<Allocation[]>(() => {
-    if (typeof window !== 'undefined') {
-      const systemUser = getCurrentSystemUser()
-      
-      if (systemUser?.role === 'admin') {
-        // Admin loads their own data
-        const userData = getCurrentUserData()
-        return userData.allocations
-      } else {
-        // System users load admin's data
-        const systemUsers = getSystemUsers()
-        const adminUser = systemUsers.find(u => u.role === 'admin' && u.isActive)
-        
-        if (adminUser) {
-          const adminData = getUserData(adminUser.email)
-          return adminData.allocations
-        }
-      }
-    }
-    return []
-  })
-
-  const [positions, setPositions] = useState<Position[]>(() => {
-    if (typeof window !== 'undefined') {
-      const systemUser = getCurrentSystemUser()
-      
-      if (systemUser?.role === 'admin') {
-        // Admin loads their own data
-        const userData = getCurrentUserData()
-        return userData.positions
-      } else {
-        // System users load admin's data
-        const systemUsers = getSystemUsers()
-        const adminUser = systemUsers.find(u => u.role === 'admin' && u.isActive)
-        
-        if (adminUser) {
-          const adminData = getUserData(adminUser.email)
-          return adminData.positions
-        }
-      }
-    }
-    return []
-  })
+    loadData()
+  }, [])
 
   // Check login status and role on mount
   useEffect(() => {
@@ -175,21 +121,22 @@ export function AllocationGrid() {
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
 
   // Grid starting month/year (top-right selectors). Persist per user.
-  const [startMonth, setStartMonth] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const userData = getCurrentUserData()
-      return userData.startMonth ?? 0
-    }
-    return 0
-  })
+  const [startMonth, setStartMonth] = useState<number>(0)
+  const [startYear, setStartYear] = useState<number>(2024)
 
-  const [startYear, setStartYear] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const userData = getCurrentUserData()
-      return userData.startYear ?? 2024
+  // Load initial settings
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const userData = await getCurrentUserData()
+        setStartMonth(userData.startMonth ?? 0)
+        setStartYear(userData.startYear ?? 2024)
+      } catch (error) {
+        console.error("Failed to load settings:", error)
+      }
     }
-    return 2024
-  })
+    loadSettings()
+  }, [])
 
   // Persist starting month/year when they change
   useEffect(() => {
@@ -224,13 +171,20 @@ export function AllocationGrid() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   
   // Load entities from localStorage for dropdown
-  const [entities, setEntities] = useState<Entity[]>(() => {
-    if (typeof window !== 'undefined') {
-      const userData = getCurrentUserData()
-      return userData.entities || []
+  const [entities, setEntities] = useState<Entity[]>([])
+
+  // Load entities
+  useEffect(() => {
+    const loadEntities = async () => {
+      try {
+        const userData = await getCurrentUserData()
+        setEntities(userData.entities || [])
+      } catch (error) {
+        console.error("Failed to load entities:", error)
+      }
     }
-    return []
-  })
+    loadEntities()
+  }, [])
 
   // Check if current user has permission for specific actions
   const canEdit = currentUserRole ? canEditPage(currentUserRole, 'allocation') : false
