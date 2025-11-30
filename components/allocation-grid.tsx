@@ -82,14 +82,17 @@ export function AllocationGrid() {
 
   // Check login status and role on mount
   useEffect(() => {
-    const user = getCurrentUser()
-    const systemUser = getCurrentSystemUser()
-    if (!user || !systemUser) {
-      window.location.href = "/login"
-    } else {
-      setCurrentUserState(user)
-      setCurrentUserRole(systemUser.role)
+    const checkAuth = async () => {
+      const user = getCurrentUser()
+      const systemUser = await getCurrentSystemUser()
+      if (!user || !systemUser) {
+        window.location.href = "/login"
+      } else {
+        setCurrentUserState(user)
+        setCurrentUserRole(systemUser.role)
+      }
     }
+    checkAuth()
   }, [])
 
   // Save data to user-specific storage whenever it changes

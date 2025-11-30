@@ -82,101 +82,65 @@ export default function ActualAllocationPage() {
 
   // Load user data on component mount
   React.useEffect(() => {
-    const user = getCurrentUser()
-    const systemUser = getCurrentSystemUser()
-    if (!user || !systemUser) {
-      window.location.href = "/login"
-      return
-    }
-    
-    setCurrentUser(user)
-    
-    // Load users and projects data from localStorage
-    const userData = getCurrentUserData()
-    const monthKey = `${selectedYear}-${selectedMonth}`
-    
-    // Load projects
-    setProjects(userData.projects || [])
-    
-    // Load allocations from staff allocation table
-    setAllocations(userData.allocations || [])
-    
-    // Load entities for account codes
-    setEntities(userData.entities || [])
-    
-    // Load month-specific lock state (applies to all users)
-    const savedLockState = localStorage.getItem(`sola-lock-state-${monthKey}`)
-    setIsLocked(savedLockState === 'true')
-    
-    // Initialize monthly allocation items
-    const savedMonthlyAllocation = localStorage.getItem(`sola-monthly-allocation-${user}-${monthKey}`)
-    
-    if (savedMonthlyAllocation) {
-      setMonthlyAllocation(JSON.parse(savedMonthlyAllocation))
-    } else {
-      // Initialize with default items for each staff member and account category
-      const accountCategories = [
-        { name: 'Net Salary', code: '631 0001' },
-        { name: 'Fringe Benefit - Leave', code: '631 0001' },
-        { name: 'Social Security', code: '635 1001' },
-        { name: 'Employee Tax', code: '620 1005' },
-        { name: 'Employer Tax', code: '620 1005' },
-        { name: 'Housing', code: '635 4001' },
-        { name: 'Other Benefits', code: '602 4001' }
-      ]
+    const loadData = async () => {
+      const user = getCurrentUser()
+      const systemUser = await getCurrentSystemUser()
+      if (!user || !systemUser) {
+        window.location.href = "/login"
+        return
+      }
       
-      const defaultItems: MonthlyAllocationItem[] = []
-      userData.users.forEach(user => {
-        accountCategories.forEach((category, index) => {
-          defaultItems.push({
-            id: `${user.id}-${category.code}-${index}`,
-            name: user.name,
-            code: category.code,
-            description: `${user.name} - ${category.name} for ${MONTHS[selectedMonth]} ${selectedYear}`,
-            currency: 'USD',
-            amount: 0,
-            project: '',
-            projectTask: '',
-            account: `${category.name} [${category.code}]`
+      setCurrentUser(user)
+      
+      // Load users and projects data from localStorage
+      const userData = await getCurrentUserData()
+      const monthKey = `${selectedYear}-${selectedMonth}`
+      
+      // Load projects
+      setProjects(userData.projects || [])
+      
+      // Load allocations from staff allocation table
+      setAllocations(userData.allocations || [])
+      
+      // Load entities for account codes
+      setEntities(userData.entities || [])
+    
+      // Load month-specific lock state (applies to all users)
+      const savedLockState = localStorage.getItem(`sola-lock-state-${monthKey}`)
+      setIsLocked(savedLockState === 'true')
+      
+      // Initialize monthly allocation items
+      const savedMonthlyAllocation = localStorage.getItem(`sola-monthly-allocation-${user}-${monthKey}`)
+      
+      if (savedMonthlyAllocation) {
+        setMonthlyAllocation(JSON.parse(savedMonthlyAllocation))
+      } else {
+        // Initialize with default items for each staff member and account category
+        const accountCategories = [
+          { name: 'Net Salary', code: '631 0001' },
+          { name: 'Fringe Benefit - Leave', code: '631 0001' },
+          { name: 'Social Security', code: '635 1001' },
+          { name: 'Employee Tax', code: '620 1005' },
+          { name: 'Employer Tax', code: '620 1005' },
+          { name: 'Housing', code: '635 4001' },
+          { name: 'Other Benefits', code: '602 4001' }
+        ]
+        
+        const defaultItems: MonthlyAllocationItem[] = []
+        accountCategories.forEach(category => {
+          userData.users.forEach((user: any) => {
+            defaultItems.push({
+              id: `${user.id}-${category.code}`,
+              userId: user.id,
+              userName: user.name,
+              accountCode: category.code,
+              accountName: category.name,
+              amount: 0,
+              currency: "USD"
+            })
           })
         })
-      })
-      setMonthlyAllocation(defaultItems)
-    }
-    
-    const usersWithPayroll = userData.users.map(user => {
-      // Load existing monthly data or create new empty structure
-      const existingPayrollData = (user as any).payrollDataByMonth?.[monthKey]
-      const existingFringeData = (user as any).fringeDataByMonth?.[monthKey]
-      const existingProjectData = (user as any).projectDataByMonth?.[monthKey]
-      
-      return {
-        ...user,
-        entity: user.entity || "Unassigned",
-        payrollDataByMonth: {
-          ...(user as any).payrollDataByMonth,
-          [monthKey]: existingPayrollData || {
-            currency: "USD",
-            netSalary: 0,
-            socialSecurity: 0,
-            employeeTax: 0,
-            employerTax: 0,
-            housing: 0,
-            otherBenefits: 0
-          }
-        },
-        fringeDataByMonth: {
-          ...(user as any).fringeDataByMonth,
-          [monthKey]: existingFringeData || {
-            workingDays: calculateWorkingDays(user.workDays || 'mon-fri', selectedMonth, selectedYear),
-            annualLeave: 0,
-            sickLeave: 0,
-            publicHolidays: 0,
-            dailyRate: 0
-          }
-        },
-        projectDataByMonth: {
-          ...(user as any).projectDataByMonth,
+        setMonthlyAllocation(defaultItems)
           [monthKey]: existingProjectData || {}
         }
       }
@@ -185,14 +149,15 @@ export default function ActualAllocationPage() {
   }, [])
 
   // Check if current user can lock payroll
-  const canLock = () => {
-    const systemUser = getCurrentSystemUser()
+  const canLock = async () => {
+    const systemUser = await getCurrentSystemUser()
     return systemUser ? canLockPayroll(systemUser.role) : false
   }
 
   // Toggle lock state (admin or senior only)
-  const toggleLock = () => {
-    if (!canLock()) return
+  const toggleLock = async () => {
+    const canLockPermission = await canLock()
+    if (!canLockPermission) return
     
     const newLockState = !isLocked
     setIsLocked(newLockState)
@@ -233,55 +198,58 @@ export default function ActualAllocationPage() {
 
   // Reload monthly allocation when month/year changes
   React.useEffect(() => {
-    const user = getCurrentUser()
-    if (!user) return
-    
-    const monthKey = `${selectedYear}-${selectedMonth}`
-    const savedMonthlyAllocation = localStorage.getItem(`sola-monthly-allocation-${user}-${monthKey}`)
-    const userData = getCurrentUserData()
-    
-    if (savedMonthlyAllocation) {
-      const loadedData = JSON.parse(savedMonthlyAllocation)
-      // Update descriptions with current month/year, preserving account category
-      const updatedData = loadedData.map((item: MonthlyAllocationItem) => {
-        // Extract account category name from the account field
-        const accountName = item.account.split(' [')[0]
-        return {
-          ...item,
-          description: `${item.name} - ${accountName} ${MONTHS[selectedMonth]} ${selectedYear}`
-        }
-      })
-      setMonthlyAllocation(updatedData)
-    } else {
-      // Initialize with default items for each staff member and account category
-      const accountCategories = [
-        { name: 'Net Salary', code: '631 0001' },
-        { name: 'Fringe Benefit - Leave', code: '631 0001' },
-        { name: 'Social Security', code: '635 1001' },
-        { name: 'Employee Tax', code: '620 1005' },
-        { name: 'Employer Tax', code: '620 1005' },
-        { name: 'Housing', code: '635 4001' },
-        { name: 'Other Benefits', code: '602 4001' }
-      ]
+    const loadMonthlyAllocation = async () => {
+      const user = getCurrentUser()
+      if (!user) return
       
-      const defaultItems: MonthlyAllocationItem[] = []
-      userData.users.forEach(user => {
-        accountCategories.forEach((category, index) => {
-          defaultItems.push({
-            id: `${user.id}-${category.code}-${index}`,
-            name: user.name,
-            code: category.code,
-            description: `${user.name} - ${category.name} for ${MONTHS[selectedMonth]} ${selectedYear}`,
-            currency: 'USD',
-            amount: 0,
-            project: '',
-            projectTask: '',
-            account: `${category.name} [${category.code}]`
+      const monthKey = `${selectedYear}-${selectedMonth}`
+      const savedMonthlyAllocation = localStorage.getItem(`sola-monthly-allocation-${user}-${monthKey}`)
+      const userData = await getCurrentUserData()
+      
+      if (savedMonthlyAllocation) {
+        const loadedData = JSON.parse(savedMonthlyAllocation)
+        // Update descriptions with current month/year, preserving account category
+        const updatedData = loadedData.map((item: MonthlyAllocationItem) => {
+          // Extract account category name from the account field
+          const accountName = item.account.split(' [')[0]
+          return {
+            ...item,
+            description: `${item.name} - ${accountName} ${MONTHS[selectedMonth]} ${selectedYear}`
+          }
+        })
+        setMonthlyAllocation(updatedData)
+      } else {
+        // Initialize with default items for each staff member and account category
+        const accountCategories = [
+          { name: 'Net Salary', code: '631 0001' },
+          { name: 'Fringe Benefit - Leave', code: '631 0001' },
+          { name: 'Social Security', code: '635 1001' },
+          { name: 'Employee Tax', code: '620 1005' },
+          { name: 'Employer Tax', code: '620 1005' },
+          { name: 'Housing', code: '635 4001' },
+          { name: 'Other Benefits', code: '602 4001' }
+        ]
+        
+        const defaultItems: MonthlyAllocationItem[] = []
+        userData.users.forEach((user: any) => {
+          accountCategories.forEach((category, index) => {
+            defaultItems.push({
+              id: `${user.id}-${category.code}-${index}`,
+              name: user.name,
+              code: category.code,
+              description: `${user.name} - ${category.name} for ${MONTHS[selectedMonth]} ${selectedYear}`,
+              currency: 'USD',
+              amount: 0,
+              project: '',
+              projectTask: '',
+              account: `${category.name} [${category.code}]`
+            })
           })
         })
-      })
-      setMonthlyAllocation(defaultItems)
+        setMonthlyAllocation(defaultItems)
+      }
     }
+    loadMonthlyAllocation()
   }, [selectedMonth, selectedYear])
 
   // Calculate working days based on user's work pattern
@@ -315,9 +283,10 @@ export default function ActualAllocationPage() {
   }
 
   // Handle cell value changes
-  const handleCellValueChange = (userId: string, field: string, value: string, section: 'payroll' | 'fringe' | 'project', projectId?: string) => {
+  const handleCellValueChange = async (userId: string, field: string, value: string, section: 'payroll' | 'fringe' | 'project', projectId?: string) => {
     // Prevent changes if locked
-    if (isLocked) return
+    const canLockPermission = await canLock()
+    if (isLocked || !canLockPermission) return
     
     const monthKey = `${selectedYear}-${selectedMonth}`
     const numValue = parseFloat(value) || 0
@@ -378,7 +347,7 @@ export default function ActualAllocationPage() {
       })
       
       // Save to localStorage
-      const userData = getCurrentUserData()
+      const userData = await getCurrentUserData()
       const updatedUserData = {
         ...userData,
         users: updatedUsers.map(user => ({
@@ -388,13 +357,7 @@ export default function ActualAllocationPage() {
           projectDataByMonth: user.projectDataByMonth
         }))
       }
-      
-      // Save to localStorage using the same key as the main app
-      const currentUser = getCurrentUser()
-      if (currentUser) {
-        const storageKey = `sola-user-data-${currentUser}`
-        localStorage.setItem(storageKey, JSON.stringify(updatedUserData))
-      }
+      setCurrentUserData(updatedUserData)
       
       return updatedUsers
     })

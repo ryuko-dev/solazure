@@ -20,7 +20,7 @@ interface UnallocatedUser {
 
 export default function PlanningPage() {
   const [currentUser, setCurrentUser] = useState<string | null>(null)
-  const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'editor' | 'viewer' | null>(null)
+  const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'editor' | 'viewer' | 'senior' | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [allocations, setAllocations] = useState<Allocation[]>([])
