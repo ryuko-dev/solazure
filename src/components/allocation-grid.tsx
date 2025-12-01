@@ -4,7 +4,7 @@
 import React, { useState, useEffect, Fragment } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { Project, User, Allocation, Position, Entity, UserRole } from "@/lib/types"
-import { getCurrentUser, clearCurrentUser, getCurrentUserData, setCurrentUserData, getCurrentSystemUser, getSystemUsers } from "../lib/storage-enhanced"
+import { getCurrentUser, clearCurrentUser, getCurrentUserData, setCurrentUserData, getCurrentSystemUser, getSystemUsers, updateUserSettings } from "../lib/storage-enhanced"
 
 const MONTHS = [
   "January",
@@ -41,6 +41,13 @@ export function AllocationGrid() {
       users: users.length,
       positions: positions.length
     })
+    
+    // Only load data if we don't already have it (prevent overwriting)
+    if (projects.length > 0 || users.length > 0 || positions.length > 0) {
+      console.log('[DEBUG] Data already exists, skipping load to prevent overwrite')
+      return
+    }
+    
     const loadData = async () => {
       try {
         console.log('[DEBUG] Starting data load...')
@@ -73,6 +80,7 @@ export function AllocationGrid() {
           }
           
           console.log('[DEBUG] Setting initial data from storage...')
+          console.log('[DEBUG] About to setProjects with:', userData.projects?.length || 0, 'projects')
           setProjects(userData.projects || [])
           setUsers(userData.users || [])
           // Only set allocations if current state is empty (prevent overwriting edits)
@@ -111,6 +119,7 @@ export function AllocationGrid() {
             }
             
             console.log('[DEBUG] Setting initial data from storage...')
+            console.log('[DEBUG] About to setProjects with:', adminData.projects?.length || 0, 'projects')
             setProjects(adminData.projects || [])
             setUsers(adminData.users || [])
             // Only set allocations if current state is empty (prevent overwriting edits)
@@ -184,7 +193,12 @@ export function AllocationGrid() {
   // Persist starting month/year when they change
   useEffect(() => {
     if (typeof window !== 'undefined' && currentUser) {
-      setCurrentUserData({ startMonth, startYear })
+      // 🚨 CRITICAL FIX: Use updateUserSettings to avoid overwriting data
+      console.log('[DEBUG] Saving startMonth/startYear settings without overwriting data')
+      updateUserSettings({ startMonth, startYear })
+        .catch(error => {
+          console.error('[DEBUG] Failed to save settings:', error)
+        })
     }
   }, [startMonth, startYear, currentUser])
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -238,6 +252,13 @@ export function AllocationGrid() {
   // Save data to user-specific storage whenever it changes - Combined into one useEffect
   useEffect(() => {
     if (typeof window !== 'undefined' && currentUser) {
+      // 🚨 CRITICAL FIX: Don't save empty data during initialization
+      const totalItems = projects.length + users.length + allocations.length + positions.length + entities.length
+      if (totalItems === 0) {
+        console.log("[v0] Skipping save - all data arrays are empty (initialization)")
+        return
+      }
+      
       console.log("[v0] Saving all data for user:", currentUser, {
         projects: projects.length,
         users: users.length,
@@ -423,6 +444,11 @@ export function AllocationGrid() {
     const loadEntities = async () => {
       try {
         console.log('[DEBUG] Loading entities...')
+        // Only load if we don't already have entities
+        if (entities.length > 0) {
+          console.log('[DEBUG] Entities already loaded, skipping')
+          return
+        }
         const userData = await getCurrentUserData()
         console.log('[DEBUG] Loaded entities:', userData.entities?.length || 0)
         setEntities(userData.entities || [])
@@ -995,11 +1021,14 @@ export function AllocationGrid() {
     // Manually trigger save to ensure changes are persisted to Azure
     if (typeof window !== 'undefined' && currentUser) {
       console.log("[v0] Manually saving after project deletion")
-      setCurrentUserData({ 
+      updateUserSettings({ 
         projects: updatedProjects,
         allocations: updatedAllocations,
         positions: updatedPositions
       })
+        .catch(error => {
+          console.error('[DEBUG] Failed to save after project deletion:', error)
+        })
     }
   }
 
@@ -1661,7 +1690,10 @@ export function AllocationGrid() {
                 // Clear current user session but keep their data
                 const user = getCurrentUser()
                 if (user) {
-                  setCurrentUserData({ startMonth, startYear }) // Save current view settings
+                  updateUserSettings({ startMonth, startYear }) // Save current view settings without overwriting
+                    .catch(error => {
+                      console.error('[DEBUG] Failed to save settings on logout:', error)
+                    })
                 }
                 clearCurrentUser()
                 window.location.href = "/login"
@@ -3415,7 +3447,10 @@ export function AllocationGrid() {
                     }
                     const updatedEntities = [...entities, newEntity]
                     setEntities(updatedEntities)
-                    setCurrentUserData({ entities: updatedEntities })
+                    updateUserSettings({ entities: updatedEntities })
+                      .catch(error => {
+                        console.error('[DEBUG] Failed to save entities:', error)
+                      })
                     
                     // Clear form
                     const nameInput = document.getElementById('newEntityName') as HTMLInputElement
@@ -3473,7 +3508,10 @@ export function AllocationGrid() {
                                 if (confirm('Are you sure you want to delete this entity?')) {
                                   const filteredEntities = entities.filter(e => e.id !== entity.id)
                                   setEntities(filteredEntities)
-                                  setCurrentUserData({ entities: filteredEntities })
+                                  updateUserSettings({ entities: filteredEntities })
+                                    .catch(error => {
+                                      console.error('[DEBUG] Failed to save entities after deletion:', error)
+                                    })
                                 }
                               }}
                               className="text-red-600 hover:text-red-800 text-sm"

@@ -25,12 +25,29 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
+    console.log('[API] 🔴 POST /api/azure/enhanced/main - Raw request data:', data)
+    
+    const totalItems = (data.projects?.length || 0) + (data.users?.length || 0) + (data.allocations?.length || 0) + (data.positions?.length || 0) + (data.entities?.length || 0)
+    console.log('[API] 🔴 POST /api/azure/enhanced/main - Total items:', totalItems)
+    
+    if (totalItems === 0) {
+      console.error('[API] 🚨 CRITICAL: Received EMPTY data request! This will overwrite existing data!')
+      console.error('[API] 🚨 Request headers:', Object.fromEntries(request.headers.entries()))
+      console.error('[API] 🚨 Request body:', JSON.stringify(data, null, 2))
+      // Don't save empty data
+      return NextResponse.json(
+        { error: 'Cannot save empty data' },
+        { status: 400 }
+      )
+    }
+    
     console.log('[API] POST /api/azure/enhanced/main - Saving main data:', {
       projects: data.projects?.length || 0,
       users: data.users?.length || 0,
       allocations: data.allocations?.length || 0,
       positions: data.positions?.length || 0,
-      entities: data.entities?.length || 0
+      entities: data.entities?.length || 0,
+      stackTrace: new Error().stack?.split('\n').slice(1, 5).join('\n')
     })
     
     await azureStorageEnhanced.setMainData(data)

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { Navigation } from "@/components/navigation"
-import { getCurrentUser, getCurrentUserData, setCurrentUserData } from "@/lib/storage-enhanced"
+import { getCurrentUser, getCurrentUserData, setCurrentUserData, updateUserSettings } from "@/lib/storage-enhanced"
 
 export default function PlanningPage() {
   const [currentUser, setCurrentUserState] = useState<string | null>(null)
@@ -41,13 +41,23 @@ export default function PlanningPage() {
 
   useEffect(() => {
     if (currentUser && projects.length > 0) {
-      setCurrentUserData({ projects })
+      // 🚨 CRITICAL FIX: Don't overwrite other data when saving projects
+      console.log('[PlanningPage] Saving projects without overwriting other data')
+      updateUserSettings({ projects })
+        .catch(error => {
+          console.error('[PlanningPage] Failed to save projects:', error)
+        })
     }
   }, [projects, currentUser])
 
   useEffect(() => {
     if (currentUser && users.length > 0) {
-      setCurrentUserData({ users })
+      // 🚨 CRITICAL FIX: Don't overwrite other data when saving users
+      console.log('[PlanningPage] Saving users without overwriting other data')
+      updateUserSettings({ users })
+        .catch(error => {
+          console.error('[PlanningPage] Failed to save users:', error)
+        })
     }
   }, [users, currentUser])
 
@@ -93,7 +103,12 @@ export default function PlanningPage() {
   // Persist starting month/year when they change
   useEffect(() => {
     if (typeof window !== 'undefined' && currentUser) {
-      setCurrentUserData({ startMonth, startYear })
+      // 🚨 CRITICAL FIX: Use updateUserSettings to avoid overwriting data
+      console.log('[PlanningPage] Saving startMonth/startYear settings without overwriting data')
+      updateUserSettings({ startMonth, startYear })
+        .catch(error => {
+          console.error('[PlanningPage] Failed to save settings:', error)
+        })
     }
   }, [startMonth, startYear, currentUser])
 

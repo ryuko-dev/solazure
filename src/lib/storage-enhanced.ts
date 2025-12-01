@@ -138,17 +138,76 @@ export async function getGlobalData(): Promise<GlobalData> {
   }
 }
 
+// Save only specific settings without overwriting other data
+export async function updateUserSettings(settings: Partial<GlobalData>): Promise<void> {
+  const timestamp = new Date().toISOString()
+  console.log(`[${timestamp}] [Enhanced Storage] updateUserSettings called with:`, settings)
+  
+  try {
+    // First get current data
+    const currentData = await getGlobalData()
+    console.log(`[${timestamp}] [Enhanced Storage] Current data before setting:`, {
+      projects: currentData.projects?.length || 0,
+      users: currentData.users?.length || 0,
+      startMonth: currentData.startMonth,
+      startYear: currentData.startYear
+    })
+    
+    // Merge settings with existing data
+    const updatedData = {
+      ...currentData,
+      ...settings
+    }
+    
+    console.log(`[${timestamp}] [Enhanced Storage] Updated data after setting:`, {
+      projects: updatedData.projects?.length || 0,
+      users: updatedData.users?.length || 0,
+      startMonth: updatedData.startMonth,
+      startYear: updatedData.startYear
+    })
+    
+    // Save the merged data
+    const response = await fetch('/api/azure/enhanced/main', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(updatedData),
+    })
+
+    if (response.ok) {
+      console.log(`[${timestamp}] [Enhanced Storage] ✅ Settings saved successfully`)
+      return
+    } else {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+  } catch (error) {
+    console.error(`[${timestamp}] [Enhanced Storage] Failed to save settings:`, error)
+    throw new Error('Unable to save user settings')
+  }
+}
+
 export async function setCurrentUserData(data: Partial<GlobalData>): Promise<void> {
   const timestamp = new Date().toISOString()
-  console.log(`[${timestamp}] [Enhanced Storage] setCurrentUserData called with:`, {
+  console.log(`[${timestamp}] [Enhanced Storage] 🔴 setCurrentUserData called with:`, {
     projects: data.projects?.length || 0,
     users: data.users?.length || 0,
     allocations: data.allocations?.length || 0,
     positions: data.positions?.length || 0,
-    entities: data.entities?.length || 0
+    entities: data.entities?.length || 0,
+    caller: new Error().stack?.split('\n')[2]?.trim()
   })
 
-  // PRIORITY 1: Try Azure enhanced storage only
+  // 🚨 CRITICAL: Check if we're saving empty data - this might be the problem!
+  const totalItems = (data.projects?.length || 0) + (data.users?.length || 0) + (data.allocations?.length || 0) + (data.positions?.length || 0) + (data.entities?.length || 0)
+  if (totalItems === 0) {
+    console.error(`[${timestamp}] [Enhanced Storage] 🚨 CRITICAL: Attempting to save EMPTY data! This will overwrite existing data!`)
+    console.error(`[${timestamp}] [Enhanced Storage] 🚨 Caller stack:`, new Error().stack?.split('\n').slice(1, 8))
+    // Don't save empty data - this is likely the bug
+    return
+  }
+
+  // USE ENHANCED AZURE STORAGE ONLY
   try {
     console.log(`[${timestamp}] [Enhanced Storage] Trying to save to Azure enhanced storage...`)
     const response = await fetch('/api/azure/enhanced/main', {
@@ -160,14 +219,14 @@ export async function setCurrentUserData(data: Partial<GlobalData>): Promise<voi
     })
 
     if (response.ok) {
-      console.log(`[${timestamp}] [Enhanced Storage] Data saved to Azure enhanced storage successfully`)
+      console.log(`[${timestamp}] [Enhanced Storage] ✅ Data saved to Azure enhanced storage successfully`)
       return
     } else {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
   } catch (error) {
-    console.error(`[${timestamp}] [Enhanced Storage] Azure enhanced storage not available, data not saved:`, error)
-    throw new Error('Unable to save data to Azure storage')
+    console.error(`[${timestamp}] [Enhanced Storage] Azure enhanced storage failed:`, error)
+    throw new Error('Unable to save data to enhanced storage')
   }
 }
 
