@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { azureStorageEnhanced } from "@/lib/azure-enhanced"
 import { initializeEnhancedStorage } from "@/lib/storage-enhanced"
@@ -10,6 +10,30 @@ export default function MigratePage() {
   const [isMigrating, setIsMigrating] = useState(false)
   const [logs, setLogs] = useState<string[]>([])
   const [status, setStatus] = useState<string>('')
+  const [localStorageData, setLocalStorageData] = useState({
+    users: 0,
+    projects: 0,
+    allocations: 0,
+    entities: 0
+  })
+
+  useEffect(() => {
+    // Only access localStorage on the client side
+    if (typeof window !== 'undefined') {
+      try {
+        const storedData = localStorage.getItem('solafire_current_user_data')
+        const data = storedData ? JSON.parse(storedData) : {}
+        setLocalStorageData({
+          users: data.users?.length || 0,
+          projects: data.projects?.length || 0,
+          allocations: data.allocations?.length || 0,
+          entities: data.entities?.length || 0
+        })
+      } catch (error) {
+        console.error('Error reading localStorage:', error)
+      }
+    }
+  }, [])
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -180,10 +204,10 @@ export default function MigratePage() {
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
           <h2 className="text-lg font-semibold text-yellow-900 mb-4">Current localStorage Status</h2>
           <div className="space-y-2 text-yellow-800">
-            <div>Users: {JSON.parse(localStorage.getItem('solafire_current_user_data') || '{}').users?.length || 0}</div>
-            <div>Projects: {JSON.parse(localStorage.getItem('solafire_current_user_data') || '{}').projects?.length || 0}</div>
-            <div>Allocations: {JSON.parse(localStorage.getItem('solafire_current_user_data') || '{}').allocations?.length || 0}</div>
-            <div>Entities: {JSON.parse(localStorage.getItem('solafire_current_user_data') || '{}').entities?.length || 0}</div>
+            <div>Users: {localStorageData.users}</div>
+            <div>Projects: {localStorageData.projects}</div>
+            <div>Allocations: {localStorageData.allocations}</div>
+            <div>Entities: {localStorageData.entities}</div>
           </div>
         </div>
       </div>
