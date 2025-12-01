@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { setCurrentUser, getCurrentSystemUser, initializeDemoData } from "@/lib/storage"
+import { setCurrentUser, getCurrentSystemUser, initializeDemoData } from "@/lib/storage-enhanced"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")

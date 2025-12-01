@@ -144,15 +144,21 @@ export async function setCurrentUserData(data: Partial<GlobalData>): Promise<voi
     }
     
     // Protect users - only prevent if this looks like an accidental overwrite
-    // Allow intentional deletions (when only users array is being updated to empty)
+    // Allow intentional deletions (when users array is explicitly set to empty)
     if (data.users !== undefined && data.users.length === 0 && existingData.users && existingData.users.length > 0) {
-      // Check if this is an intentional deletion (only users changing) vs accidental (other data also changing)
+      // Check if this is an intentional deletion
+      // If users is explicitly set to empty array, allow it
+      // Only prevent if it looks like accidental data loss
       const changingKeys = Object.keys(data).filter(key => data[key as keyof typeof data] !== undefined)
-      const isIntentionalDeletion = changingKeys.length === 1 && changingKeys[0] === 'users'
+      const hasOtherDataChanges = changingKeys.some(key => key !== 'users' && data[key as keyof typeof data] !== undefined)
       
-      if (!isIntentionalDeletion) {
+      // Only prevent if other data is changing but users is empty (suggests accidental data loss)
+      // If only users are changing to empty, or users are explicitly set to empty, allow it
+      if (hasOtherDataChanges && !data.hasOwnProperty('users')) {
         console.log(`[${timestamp}] [Storage] SAFEGUARD: Preventing accidental overwrite of`, existingData.users.length, 'existing users with empty array')
         finalData.users = existingData.users
+      } else {
+        console.log(`[${timestamp}] [Storage] Allowing intentional user deletion - users array explicitly set to empty`)
       }
     }
     
@@ -225,15 +231,21 @@ export async function setCurrentUserData(data: Partial<GlobalData>): Promise<voi
   }
   
   // Protect users - only prevent if this looks like an accidental overwrite
-  // Allow intentional deletions (when only users array is being updated to empty)
+  // Allow intentional deletions (when users array is explicitly set to empty)
   if (data.users !== undefined && data.users.length === 0 && existingData.users && existingData.users.length > 0) {
-    // Check if this is an intentional deletion (only users changing) vs accidental (other data also changing)
+    // Check if this is an intentional deletion
+    // If users is explicitly set to empty array, allow it
+    // Only prevent if it looks like accidental data loss
     const changingKeys = Object.keys(data).filter(key => data[key as keyof typeof data] !== undefined)
-    const isIntentionalDeletion = changingKeys.length === 1 && changingKeys[0] === 'users'
+    const hasOtherDataChanges = changingKeys.some(key => key !== 'users' && data[key as keyof typeof data] !== undefined)
     
-    if (!isIntentionalDeletion) {
+    // Only prevent if other data is changing but users is empty (suggests accidental data loss)
+    // If only users are changing to empty, or users are explicitly set to empty, allow it
+    if (hasOtherDataChanges && !data.hasOwnProperty('users')) {
       console.log(`[${timestamp}] [Storage] SAFEGUARD: Preventing localStorage accidental overwrite of`, existingData.users.length, 'existing users')
       finalData.users = existingData.users
+    } else {
+      console.log(`[${timestamp}] [Storage] Allowing localStorage intentional user deletion - users array explicitly set to empty`)
     }
   }
   
@@ -297,6 +309,10 @@ export async function getSystemUsers(): Promise<SystemUser[]> {
   // Fallback to localStorage
   const localUsers = localStorage.getItem(STORAGE_KEYS.SYSTEM_USERS)
   return localUsers ? JSON.parse(localUsers) : []
+}
+
+export async function getGlobalData(): Promise<GlobalData> {
+  return await getCurrentUserData()
 }
 
 // Initialize with demo data if needed

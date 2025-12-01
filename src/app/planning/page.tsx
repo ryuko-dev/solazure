@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { Navigation } from "@/components/navigation"
-import { getCurrentUser, getCurrentUserData, setCurrentUserData } from "@/lib/storage"
+import { getCurrentUser, getCurrentUserData, setCurrentUserData } from "@/lib/storage-enhanced"
 
 export default function PlanningPage() {
   const [currentUser, setCurrentUserState] = useState<string | null>(null)

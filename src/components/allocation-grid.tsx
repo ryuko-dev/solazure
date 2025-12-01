@@ -2,8 +2,9 @@
 "use client"
 
 import React, { useState, useEffect, Fragment } from "react"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { Project, User, Allocation, Position, Entity, UserRole } from "@/lib/types"
-import { getCurrentUser, clearCurrentUser, getCurrentUserData, setCurrentUserData, getCurrentSystemUser, getSystemUsers } from "../lib/storage"
+import { getCurrentUser, clearCurrentUser, getCurrentUserData, setCurrentUserData, getCurrentSystemUser, getSystemUsers } from "../lib/storage-enhanced"
 
 const MONTHS = [
   "January",
@@ -338,6 +339,76 @@ export function AllocationGrid() {
     return months
   }
 
+  // Calculate total months in the project
+  const getTotalProjectMonths = () => {
+    return (projectEndYear - projectStartYear + 1) * 12
+  }
+
+  // Check if navigation should be shown
+  const shouldShowNavigation = () => {
+    return getTotalProjectMonths() > 12
+  }
+
+  // Navigation handlers
+  const handlePrevMonths = () => {
+    if (monthTablePage > 0) {
+      setMonthTablePage(monthTablePage - 1)
+    }
+  }
+
+  const handleNextMonths = () => {
+    const maxPage = Math.floor((getTotalProjectMonths() - 1) / 12)
+    if (monthTablePage < maxPage) {
+      setMonthTablePage(monthTablePage + 1)
+    }
+  }
+
+  // Check if a month is beyond the project end date
+  const isMonthBeyondProjectEnd = (monthIndex: number) => {
+    if (!projectEndMonth || !projectEndYear) {
+      return false // No end date set, allow all months
+    }
+    
+    const monthYear = Math.floor(monthIndex / 12) + 2024
+    const month = monthIndex % 12
+    
+    // Check if the month is after the project end month/year
+    if (monthYear > projectEndYear) {
+      return true
+    } else if (monthYear === projectEndYear && month > projectEndMonth) {
+      return true
+    }
+    
+    return false
+  }
+
+  // Get all months in the project (not just displayed ones)
+  const getAllProjectMonths = () => {
+    const months = []
+    const totalMonths = getTotalProjectMonths()
+    
+    for (let i = 0; i < totalMonths; i++) {
+      const year = Math.floor(i / 12) + projectStartYear
+      const month = i % 12
+      const globalIndex = (year - 2024) * 12 + month
+      months.push({
+        globalIndex,
+        year,
+        month,
+        displayName: `${MONTHS[month].slice(0, 3).toUpperCase()} ${String(year).slice(-2)}`,
+      })
+    }
+    
+    return months
+  }
+
+  // Check if any positions have been entered (have budget values > 0)
+  const hasPositionEntries = () => {
+    return positionBudgets.some(positionBudget => 
+      Object.values(positionBudget.budgets).some((value) => typeof value === 'number' && value > 0)
+    )
+  }
+
   // Load entities
   useEffect(() => {
     const loadEntities = async () => {
@@ -434,13 +505,18 @@ export function AllocationGrid() {
     setEditingProjectId(projectId)
     const project = projects.find((p) => p.id === projectId)
     if (project) {
+      console.log('[DEBUG] Editing project:', project.name, 'allocationMode:', project.allocationMode)
       setNewProjectName(project.name)
       setSelectedColor(project.color)
       setProjectStartMonth(project.startMonth ?? 0)
       setProjectStartYear(project.startYear ?? 2024)
       setProjectEndMonth(project.endMonth ?? 0)
       setProjectEndYear(project.endYear ?? 2024)
-      setAllocationMode(project.allocationMode ?? 'percentage')
+      
+      // Set allocation mode from project or default to percentage
+      const modeToSet = project.allocationMode ?? 'percentage'
+      console.log('[DEBUG] Setting allocation mode to:', modeToSet)
+      setAllocationMode(modeToSet)
       setMonthTablePage(0)
 
       const projectPositions = positions.filter((p) => p.projectId === projectId)
@@ -459,6 +535,7 @@ export function AllocationGrid() {
         const pos = positionMap.get(name)!
         // Use days if available, otherwise use percentage
         const value = project.allocationMode === 'days' && p.days ? p.days : p.percentage
+        console.log('[DEBUG] Loading position:', name, 'month:', p.monthIndex, 'value:', value, 'mode:', project.allocationMode)
         pos.budgets[p.monthIndex] = value
       })
 
@@ -494,17 +571,23 @@ export function AllocationGrid() {
       // Update existing project
       console.log('[DEBUG] Updating existing project:', editingProjectId)
       
-      // Update positions
+      // Get all project months to preserve existing positions
+      const allProjectMonths = getAllProjectMonths()
+      
+      // Update positions - preserve existing positions from all months
       const newPositions: Position[] = []
-      displayMonths.forEach((displayMonth) => {
+      allProjectMonths.forEach((projectMonth) => {
         positionBudgets.forEach((positionBudget) => {
-          const value = positionBudget.budgets[displayMonth.globalIndex] || 0
+          const value = positionBudget.budgets[projectMonth.globalIndex] || 0
           if (value > 0) {
+            // Convert to percentage for the Position object (always stored as percentage)
+            const percentageValue = allocationMode === 'days' ? (value / getWorkingDaysInMonth(projectMonth.year, projectMonth.month, 1)) * 100 : value
+            
             const position: Position = {
-              id: `pos-${editingProjectId}-${positionBudget.id}-${displayMonth.globalIndex}`,
+              id: `pos-${editingProjectId}-${positionBudget.id}-${projectMonth.globalIndex}`,
               projectId: editingProjectId,
-              monthIndex: displayMonth.globalIndex,
-              percentage: allocationMode === 'days' ? (value / getWorkingDaysInMonth(displayMonth.year, displayMonth.month, 1)) * 100 : value,
+              monthIndex: projectMonth.globalIndex,
+              percentage: percentageValue,
               allocated: 0,
               name: positionBudget.name,
               projectTask: positionBudget.projectTask,
@@ -520,11 +603,11 @@ export function AllocationGrid() {
         return [...filtered, ...newPositions]
       })
       
-      // Update project's positions array
+      // Update project's positions array and allocation mode
       setProjects((prev) =>
         prev.map((p) =>
           p.id === editingProjectId
-            ? { ...p, positions: newPositions }
+            ? { ...p, positions: newPositions, allocationMode }
             : p
         )
       )
@@ -547,15 +630,19 @@ export function AllocationGrid() {
       
       // Create positions for the new project if any are defined
       const newPositions: Position[] = []
-      displayMonths.forEach((displayMonth) => {
+      const allProjectMonths = getAllProjectMonths()
+      allProjectMonths.forEach((projectMonth) => {
         positionBudgets.forEach((positionBudget) => {
-          const value = positionBudget.budgets[displayMonth.globalIndex] || 0
+          const value = positionBudget.budgets[projectMonth.globalIndex] || 0
           if (value > 0) {
+            // Convert to percentage for the Position object (always stored as percentage)
+            const percentageValue = allocationMode === 'days' ? (value / getWorkingDaysInMonth(projectMonth.year, projectMonth.month, 1)) * 100 : value
+            
             const position: Position = {
-              id: `pos-${newProject.id}-${positionBudget.id}-${displayMonth.globalIndex}`,
+              id: `pos-${newProject.id}-${positionBudget.id}-${projectMonth.globalIndex}`,
               projectId: newProject.id,
-              monthIndex: displayMonth.globalIndex,
-              percentage: allocationMode === 'days' ? (value / getWorkingDaysInMonth(displayMonth.year, displayMonth.month, 1)) * 100 : value,
+              monthIndex: projectMonth.globalIndex,
+              percentage: percentageValue,
               allocated: 0,
               name: positionBudget.name,
               projectTask: positionBudget.projectTask,
@@ -609,6 +696,12 @@ export function AllocationGrid() {
   }
 
   const handleUpdatePositionBudget = (positionId: string, monthIndex: number, value: number) => {
+    // Check if the month is beyond the project end date
+    if (isMonthBeyondProjectEnd(monthIndex) && value > 0) {
+      // Don't allow adding values beyond project end
+      return
+    }
+    
     setPositionBudgets(positionBudgets.map((p) => {
       if (p.id === positionId) {
         const budgets = { ...p.budgets }
@@ -634,6 +727,10 @@ export function AllocationGrid() {
     // Also delete the actual positions from the positions state
     const updatedPositions = positions.filter((p) => !p.id.includes(positionId))
     setPositions(updatedPositions)
+    
+    // Clean up allocations associated with the deleted positions
+    const updatedAllocations = allocations.filter((a) => !a.positionId || !a.positionId.includes(positionId))
+    setAllocations(updatedAllocations)
     
     // Update projects to remove deleted positions
     const updatedProjects = projects.map((project) => ({
@@ -2782,29 +2879,36 @@ export function AllocationGrid() {
             <div className="mb-6">
               <label className="text-xs font-medium text-gray-600 mb-2 block">Allocation Mode</label>
               <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className={`flex items-center gap-2 ${hasPositionEntries() ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                   <input
                     type="radio"
                     name="allocationMode"
                     value="percentage"
                     checked={allocationMode === 'percentage'}
                     onChange={(e) => setAllocationMode('percentage')}
+                    disabled={hasPositionEntries()}
                     className="text-blue-600"
                   />
                   <span className="text-sm">% Allocation</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className={`flex items-center gap-2 ${hasPositionEntries() ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                   <input
                     type="radio"
                     name="allocationMode"
                     value="days"
                     checked={allocationMode === 'days'}
                     onChange={(e) => setAllocationMode('days')}
+                    disabled={hasPositionEntries()}
                     className="text-blue-600"
                   />
                   <span className="text-sm">Day Allocation</span>
                 </label>
               </div>
+              {hasPositionEntries() && (
+                <p className="text-xs text-amber-600 mt-2">
+                  ⚠️ Allocation mode cannot be changed when positions have been entered. Clear all position values to change mode.
+                </p>
+              )}
             </div>
 
             <div className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -2872,7 +2976,32 @@ export function AllocationGrid() {
             {/* Positions by Month Table */}
             <div className="mb-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-semibold text-gray-700">Positions by Month</h3>
+                <div className="flex items-center gap-4">
+                  <h3 className="text-sm font-semibold text-gray-700">Positions by Month</h3>
+                  {shouldShowNavigation() && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handlePrevMonths}
+                        disabled={monthTablePage === 0}
+                        className="p-1 text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                        title="Previous 12 months"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span className="text-xs text-gray-600 min-w-20 text-center">
+                        {monthTablePage * 12 + 1}-{Math.min((monthTablePage + 1) * 12, getTotalProjectMonths())} of {getTotalProjectMonths()} months
+                      </span>
+                      <button
+                        onClick={handleNextMonths}
+                        disabled={monthTablePage >= Math.floor((getTotalProjectMonths() - 1) / 12)}
+                        className="p-1 text-gray-600 hover:text-gray-900 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+                        title="Next 12 months"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleAddPosition}
@@ -2932,30 +3061,25 @@ export function AllocationGrid() {
                             />
                           </td>
                           {getDisplayMonths().map((displayMonth) => {
-                            // Get the stored value
+                            // Get the stored value (always stored as the current allocation mode)
                             const storedValue = positionBudget.budgets[displayMonth.globalIndex] || 0
                             
-                            // Convert value based on current allocation mode
-                            let displayValue = storedValue
-                            if (allocationMode === 'days' && storedValue > 0 && storedValue <= 100) {
-                              // If stored as percentage but showing as days, convert
-                              displayValue = Math.round((storedValue / 100) * getWorkingDaysInMonth(displayMonth.year, displayMonth.month, 1))
-                            } else if (allocationMode === 'percentage' && storedValue > 100) {
-                              // If stored as days but showing as percentage, convert
-                              const workingDays = getWorkingDaysInMonth(displayMonth.year, displayMonth.month, 1)
-                              displayValue = Math.round((storedValue / workingDays) * 100)
-                            }
+                            // Display the stored value directly - no conversion needed since we store in current mode
+                            const displayValue = storedValue
                             
                             return (
                               <td
                                 key={displayMonth.globalIndex}
-                                className="px-4 py-2 border-r border-gray-300 last:border-r-0 bg-white"
+                                className={`px-4 py-2 border-r border-gray-300 last:border-r-0 ${
+                                  isMonthBeyondProjectEnd(displayMonth.globalIndex) ? 'bg-gray-100' : 'bg-white'
+                                }`}
                               >
                                 <input
                                   type="number"
                                   min="0"
                                   max={allocationMode === 'days' ? getWorkingDaysInMonth(displayMonth.year, displayMonth.month, 1) : 999}
                                   value={displayValue || ""}
+                                  disabled={isMonthBeyondProjectEnd(displayMonth.globalIndex)}
                                   onChange={(e) =>
                                     handleUpdatePositionBudget(
                                       positionBudget.id,
@@ -2963,7 +3087,11 @@ export function AllocationGrid() {
                                       e.target.value ? Number(e.target.value) : 0,
                                     )
                                   }
-                                  className="w-full px-2 py-1 text-center border border-gray-300 rounded text-gray-900 bg-white"
+                                  className={`w-full px-2 py-1 text-center border rounded ${
+                                    isMonthBeyondProjectEnd(displayMonth.globalIndex)
+                                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
+                                      : 'border-gray-300 text-gray-900 bg-white'
+                                  }`}
                                   placeholder={allocationMode === 'days' ? `0-${getWorkingDaysInMonth(displayMonth.year, displayMonth.month, 1)} days` : "0%"}
                                 />
                               </td>
