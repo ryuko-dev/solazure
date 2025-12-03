@@ -687,6 +687,21 @@ export function AllocationGrid() {
             // Convert to percentage for the Position object (always stored as percentage)
             const percentageValue = allocationMode === 'days' ? (value / getWorkingDaysInMonth(projectMonth.year, projectMonth.month, 1)) * 100 : value
             
+            // Calculate actual allocated amount from current allocations
+            const currentAllocated = allocations
+              .filter(a => 
+                a.projectId === editingProjectId && 
+                a.monthIndex === projectMonth.globalIndex && 
+                a.positionName === positionBudget.name
+              )
+              .reduce((sum, a) => sum + (a.percentage || 0), 0)
+            
+            // Skip creating position if it's already fully allocated
+            if (currentAllocated >= percentageValue) {
+              console.log(`[DEBUG] Skipping position ${positionBudget.name} for month ${projectMonth.globalIndex} - already fully allocated (${currentAllocated}% >= ${percentageValue}%)`)
+              return
+            }
+            
             const position: Position = {
               id: `pos-${editingProjectId}-${positionBudget.id}-${projectMonth.globalIndex}`,
               projectId: editingProjectId,
@@ -694,7 +709,7 @@ export function AllocationGrid() {
               percentage: percentageValue,
               // If allocation mode is days, store the original days value as well
               days: allocationMode === 'days' ? value : undefined,
-              allocated: 0,
+              allocated: currentAllocated, // Preserve actual allocated amount
               name: positionBudget.name,
               projectTask: positionBudget.projectTask,
             }
@@ -1878,6 +1893,7 @@ export function AllocationGrid() {
 
                     return positionsForMonth
                       .map((position: Position) => {
+                        // Calculate actual allocated amount from allocation records (not position.allocated field)
                         const allocated = allocations
                           .filter(
                             (a) =>
@@ -1892,8 +1908,9 @@ export function AllocationGrid() {
 
                         console.log(`[DEBUG] Found unallocated position:`, {
                           positionName: position.name,
+                          positionId: position.id,
                           percentage: position.percentage,
-                          allocated,
+                          allocatedFromRecords: allocated,
                           unallocated
                         })
 
