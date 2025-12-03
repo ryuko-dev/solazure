@@ -80,14 +80,6 @@ export default function LoginPage() {
               Sign In
             </button>
           </form>
-
-          <div className="mt-6 p-4 bg-gray-50 rounded-md">
-            <p className="text-sm text-gray-600">
-              <strong>Demo Access:</strong><br />
-              Email: any email<br />
-              Password: <code className="bg-gray-200 px-1">admin123</code>
-            </p>
-          </div>
         </div>
       </div>
     </div>
