@@ -120,12 +120,10 @@ export default function ExpenseAllocationPage() {
       const user = localStorage.getItem('sola-current-user')
       const systemUser = await getCurrentSystemUser()
 
-      // For development/testing: if no user/systemUser is present, fall back to a test user
       if (!user || !systemUser) {
-        // Do not redirect in dev/test flows; use a default test user
-        console.log('[expense-allocation] No current user found; falling back to test-user for local/dev')
-        setCurrentUser('test-user')
-        setCurrentUserRole('admin')
+        console.log('[expense-allocation] No current user found; redirecting to login')
+        window.location.href = '/login'
+        return
       } else {
         setCurrentUser(user)
         // Cast the role from SystemUser to UserRole

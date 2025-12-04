@@ -169,12 +169,9 @@ export function AllocationGrid() {
         console.log("[DEBUG] Auth check results - user:", user, "systemUser:", systemUser)
         
         if (!user || !systemUser) {
-          console.log("[DEBUG] No user or systemUser found - setting test user as admin")
-          // window.location.href = "/login"
-          // For testing, set default values
-          setCurrentUserState("test-user")
-          setCurrentUserRole("admin")
-          console.log("[DEBUG] Set test user role to admin")
+          console.log("[DEBUG] No user or systemUser found - redirecting to login")
+          window.location.href = "/login"
+          return
         } else {
           console.log("[DEBUG] User found - setting real user role")
           setCurrentUserState(user)
@@ -183,10 +180,7 @@ export function AllocationGrid() {
         }
       } catch (error) {
         console.error('[DEBUG] Error in authentication:', error)
-        // Fallback: set test user as admin
-        setCurrentUserState("test-user")
-        setCurrentUserRole("admin")
-        console.log('[DEBUG] Fallback: Set test user role to admin due to error')
+        window.location.href = "/login"
       }
     }
     checkAuth()

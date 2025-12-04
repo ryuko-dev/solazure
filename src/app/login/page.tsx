@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { setCurrentUser, getCurrentSystemUser, initializeDemoData } from "@/lib/storage-enhanced"
+import { setCurrentUser, getCurrentSystemUser } from "@/lib/storage-enhanced"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -15,15 +15,14 @@ export default function LoginPage() {
     setError("")
 
     try {
-      // Initialize demo data if needed
-      await initializeDemoData()
-
-      // Check if user exists (for demo, accept any email with password "admin123")
-      if (password === "admin123") {
+      // Check if user exists in system users
+      const systemUser = await getCurrentSystemUser()
+      
+      if (systemUser && systemUser.email === email) {
         setCurrentUser(email)
         router.push("/")
       } else {
-        setError("Invalid password. Use 'admin123' for demo.")
+        setError("Invalid email or password.")
       }
     } catch (err) {
       setError("Login failed. Please try again.")

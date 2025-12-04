@@ -51,44 +51,6 @@ export async function getCurrentUserData(): Promise<GlobalData> {
 }
 
 // Enhanced main data operations
-// Initialize with demo data if needed
-export async function initializeDemoData(): Promise<void> {
-  const systemUsers = await getSystemUsers()
-  
-  if (systemUsers.length === 0) {
-    // Create demo admin user
-    const demoUsers: SystemUser[] = [
-      {
-        id: "1",
-        email: "admin@sola.com",
-        name: "Admin User",
-        password: "admin123", // In production, this should be hashed
-        role: "admin",
-        isActive: true,
-        createdAt: new Date().toISOString()
-      }
-    ]
-
-    try {
-      const response = await fetch('/api/azure/users', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(demoUsers)
-      })
-      
-      if (response.ok) {
-        console.log("Demo data saved to Azure")
-      }
-    } catch (error) {
-      console.log("Azure API not available, using localStorage")
-    }
-    
-    localStorage.setItem(STORAGE_KEYS.SYSTEM_USERS, JSON.stringify(demoUsers))
-    console.log("Demo data initialized")
-  }
-}
 
 export async function getGlobalData(): Promise<GlobalData> {
   const timestamp = new Date().toISOString()
@@ -202,15 +164,6 @@ export async function setCurrentUserData(data: Partial<GlobalData>): Promise<voi
     entities: data.entities?.length || 0,
     caller: new Error().stack?.split('\n')[2]?.trim()
   })
-
-  // 🚨 CRITICAL: Check if we're saving empty data - this might be the problem!
-  const totalItems = (data.projects?.length || 0) + (data.users?.length || 0) + (data.allocations?.length || 0) + (data.positions?.length || 0) + (data.entities?.length || 0)
-  if (totalItems === 0) {
-    console.error(`[${timestamp}] [Enhanced Storage] 🚨 CRITICAL: Attempting to save EMPTY data! This will overwrite existing data!`)
-    console.error(`[${timestamp}] [Enhanced Storage] 🚨 Caller stack:`, new Error().stack?.split('\n').slice(1, 8))
-    // Don't save empty data - this is likely the bug
-    return
-  }
 
   // USE ENHANCED AZURE STORAGE ONLY
   try {
